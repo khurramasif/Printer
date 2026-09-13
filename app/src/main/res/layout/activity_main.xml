@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:text="HP 1320 RAW Print"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#0F172A"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:text="Router LAN IP Address:"
+        android:layout_marginTop="16dp"
+        android:textSize="12sp"
+        android:textColor="#64748B"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <EditText
+        android:id="@+id/txtIp"
+        android:text="192.168.1.1"
+        android:textSize="16sp"
+        android:inputType="textUri"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:text="Raw Socket Port:"
+        android:layout_marginTop="10dp"
+        android:textSize="12sp"
+        android:textColor="#64748B"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <EditText
+        android:id="@+id/txtPort"
+        android:text="9100"
+        android:textSize="16sp"
+        android:inputType="number"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <Button
+        android:id="@+id/btnPick"
+        android:text="1. Select PDF File"
+        android:layout_marginTop="24dp"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"/>
+
+    <Button
+        android:id="@+id/btnPrint"
+        android:text="2. Convert &amp; Print to HP 1320"
+        android:layout_marginTop="12dp"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"/>
+
+    <TextView
+        android:id="@+id/lblStatus"
+        android:text="Status: Ready"
+        android:textColor="#008744"
+        android:textStyle="bold"
+        android:layout_marginTop="24dp"
+        android:textSize="15sp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+</LinearLayout>
