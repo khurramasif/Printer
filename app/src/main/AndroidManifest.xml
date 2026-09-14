@@ -5,36 +5,49 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:label="HP LaserJet 1320 Print Service"
+        android:label="HP 1320 Print"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:allowBackup="true"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.Light">
 
-        <!-- Setup Screen to configure Printer IP and Port -->
         <activity
             android:name=".MainActivity"
-            android:label="HP 1320 Settings"
-            android:exported="true">
+            android:label="HP 1320 Print"
+            android:exported="true"
+            android:launchMode="singleTask">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
 
-        <!-- Official Android System Print Service -->
-        <service
-            android:name=".HpPrintService"
-            android:permission="android.permission.BIND_PRINT_SERVICE"
-            android:exported="true">
+            <!-- Makes app appear in Share menu for Images (WhatsApp, Gallery) -->
             <intent-filter>
-                <action android:name="android.printservice.PrintService" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
             </intent-filter>
-            <meta-data
-                android:name="android.printservice"
-                android:resource="@xml/print_service_config" />
-        </service>
 
+            <!-- Makes app appear in Share menu for PDFs and all files -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!-- "Open with" support -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+        </activity>
     </application>
 </manifest>
