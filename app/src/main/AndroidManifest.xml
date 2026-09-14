@@ -5,38 +5,36 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:label="HP 1320 Print"
+        android:label="HP LaserJet 1320 Print Service"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:allowBackup="true"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.Light">
 
+        <!-- Setup Screen to configure Printer IP and Port -->
         <activity
             android:name=".MainActivity"
+            android:label="HP 1320 Settings"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <!-- Allows sharing PDF directly from WhatsApp / File Managers -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/pdf" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-
-            <!-- Allows "Open with" -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:mimeType="application/pdf" />
-            </intent-filter>
-
         </activity>
+
+        <!-- Official Android System Print Service -->
+        <service
+            android:name=".HpPrintService"
+            android:permission="android.permission.BIND_PRINT_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.printservice"
+                android:resource="@xml/print_service_config" />
+        </service>
+
     </application>
 </manifest>

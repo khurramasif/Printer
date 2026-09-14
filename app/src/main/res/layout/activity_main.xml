@@ -6,7 +6,7 @@
     android:layout_height="match_parent">
 
     <TextView
-        android:text="HP 1320 Print Hub"
+        android:text="HP 1320 Print Service"
         android:textSize="22sp"
         android:textStyle="bold"
         android:textColor="#0F172A"
@@ -14,10 +14,19 @@
         android:layout_height="wrap_content"/>
 
     <TextView
-        android:text="Router LAN IP Address:"
-        android:layout_marginTop="16dp"
-        android:textSize="12sp"
-        android:textColor="#64748B"
+        android:text="Set your router or print server connection details. Once saved, this printer appears in Word, Excel, WhatsApp, and Android system print menus."
+        android:layout_marginTop="8dp"
+        android:textSize="13sp"
+        android:textColor="#475569"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:text="Printer / Router IP Address:"
+        android:layout_marginTop="20dp"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="#1E293B"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
 
@@ -30,10 +39,11 @@
         android:layout_height="wrap_content"/>
 
     <TextView
-        android:text="Raw Socket Port:"
-        android:layout_marginTop="8dp"
-        android:textSize="12sp"
-        android:textColor="#64748B"
+        android:text="RAW Socket Port:"
+        android:layout_marginTop="12dp"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="#1E293B"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
 
@@ -45,33 +55,24 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
 
-    <CheckBox
-        android:id="@+id/chkDuplex"
-        android:text="Double-Sided Printing (Duplex)"
-        android:checked="true"
-        android:textSize="15sp"
-        android:layout_marginTop="14dp"
+    <Button
+        android:id="@+id/btnSave"
+        android:text="Save Settings"
+        android:layout_marginTop="24dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"/>
+        android:layout_height="52dp"/>
 
     <Button
-        android:id="@+id/btnPick"
-        android:text="Select PDF Manually"
-        android:layout_marginTop="16dp"
+        android:id="@+id/btnOpenSystemSettings"
+        android:text="Open Android Print Settings"
+        android:layout_marginTop="12dp"
         android:layout_width="match_parent"
-        android:layout_height="48dp"/>
-
-    <Button
-        android:id="@+id/btnPrint"
-        android:text="Send to HP 1320"
-        android:layout_marginTop="10dp"
-        android:layout_width="match_parent"
-        android:layout_height="54dp"/>
+        android:layout_height="52dp"/>
 
     <TextView
         android:id="@+id/lblStatus"
-        android:text="Status: Ready"
-        android:textColor="#008744"
+        android:text="Status: Configured"
+        android:textColor="#0284C7"
         android:textStyle="bold"
         android:layout_marginTop="20dp"
         android:textSize="15sp"
