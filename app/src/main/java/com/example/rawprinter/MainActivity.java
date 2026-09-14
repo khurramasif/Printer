@@ -9,7 +9,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
-import android.view.Gravity;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -18,6 +17,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -28,13 +29,12 @@ public class MainActivity extends Activity {
     private EditText txtIp, txtPort;
     private CheckBox chkDuplex;
     private TextView lblStatus;
-    private Uri targetUri = null;
+    private File cachedFile = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Dynamic, robust UI layout (zero XML ID dependencies)
         ScrollView scroll = new ScrollView(this);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -85,14 +85,14 @@ public class MainActivity extends Activity {
         Button btnPrint = new Button(this);
         btnPrint.setText("Print to HP 1320");
         btnPrint.setOnClickListener(v -> {
-            if (targetUri == null) {
+            if (cachedFile == null || !cachedFile.exists()) {
                 Toast.makeText(this, "Please select or share a document first.", Toast.LENGTH_SHORT).show();
                 return;
             }
             String ip = txtIp.getText().toString().trim();
             int port = Integer.parseInt(txtPort.getText().toString().trim());
             boolean duplex = chkDuplex.isChecked();
-            new PrintTask(ip, port, duplex, targetUri).execute();
+            new PrintTask(ip, port, duplex, cachedFile).execute();
         });
         layout.addView(btnPrint);
 
@@ -106,20 +106,20 @@ public class MainActivity extends Activity {
         scroll.addView(layout);
         setContentView(scroll);
 
-        processIntent(getIntent());
+        handleIncomingUri(getIntent());
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        processIntent(intent);
+        handleIncomingUri(intent);
     }
 
-    private void processIntent(Intent intent) {
+    private void handleIncomingUri(Intent intent) {
         if (intent == null) return;
-        String action = intent.getAction();
         Uri uri = null;
+        String action = intent.getAction();
 
         if (Intent.ACTION_SEND.equals(action)) {
             if (intent.hasExtra(Intent.EXTRA_STREAM)) {
@@ -132,18 +132,39 @@ public class MainActivity extends Activity {
         }
 
         if (uri != null) {
-            targetUri = uri;
-            lblStatus.setText("File loaded! Tap 'Print to HP 1320'");
-            Toast.makeText(this, "Document ready to print", Toast.LENGTH_SHORT).show();
+            importFile(uri);
         }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PICK_FILE && resultCode == RESULT_OK && data != null) {
-            targetUri = data.getData();
-            lblStatus.setText("File selected! Tap 'Print to HP 1320'");
+        if (requestCode == PICK_FILE && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            importFile(data.getData());
+        }
+    }
+
+    private void importFile(Uri uri) {
+        try {
+            InputStream in = getContentResolver().openInputStream(uri);
+            if (in == null) {
+                lblStatus.setText("Error: Cannot read shared file.");
+                return;
+            }
+            cachedFile = new File(getCacheDir(), "job_to_print.tmp");
+            FileOutputStream out = new FileOutputStream(cachedFile);
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
+            }
+            in.close();
+            out.close();
+
+            lblStatus.setText("File ready! Tap 'Print to HP 1320'");
+            Toast.makeText(this, "Document loaded successfully", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            lblStatus.setText("Error caching file: " + e.getMessage());
         }
     }
 
@@ -151,14 +172,14 @@ public class MainActivity extends Activity {
         private final String ip;
         private final int port;
         private final boolean duplex;
-        private final Uri uri;
+        private final File file;
         private String error = "";
 
-        PrintTask(String ip, int port, boolean duplex, Uri uri) {
+        PrintTask(String ip, int port, boolean duplex, File file) {
             this.ip = ip;
             this.port = port;
             this.duplex = duplex;
-            this.uri = uri;
+            this.file = file;
         }
 
         @Override
@@ -178,41 +199,35 @@ public class MainActivity extends Activity {
                 String initPcl = "\u001B%-12345X@PJL\r\n@PJL ENTER LANGUAGE=PCL\r\n\u001BE" + duplexCmd;
                 out.write(initPcl.getBytes("US-ASCII"));
 
-                String mime = getContentResolver().getType(uri);
-                if (mime == null) mime = "";
-
-                if (mime.startsWith("image/") || uri.toString().matches("(?i).*\\.(png|jpg|jpeg|webp)$")) {
+                // Try opening as an image first
+                Bitmap imageBmp = BitmapFactory.decodeFile(file.getAbsolutePath());
+                if (imageBmp != null) {
                     publishProgress("Rendering image...");
-                    InputStream in = getContentResolver().openInputStream(uri);
-                    Bitmap bmp = BitmapFactory.decodeStream(in);
-                    if (in != null) in.close();
-                    if (bmp != null) {
+                    out.write(renderBitmapToPcl(imageBmp));
+                    imageBmp.recycle();
+                } else {
+                    // If not an image, render as PDF
+                    publishProgress("Rendering PDF pages...");
+                    ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                    PdfRenderer renderer = new PdfRenderer(pfd);
+                    int count = renderer.getPageCount();
+
+                    for (int i = 0; i < count; i++) {
+                        publishProgress("Printing page " + (i + 1) + " of " + count + "...");
+                        PdfRenderer.Page page = renderer.openPage(i);
+                        int w = (page.getWidth() * 300) / 72;
+                        int h = (page.getHeight() * 300) / 72;
+                        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                        bmp.eraseColor(0xFFFFFFFF);
+                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+                        page.close();
+
                         out.write(renderBitmapToPcl(bmp));
                         bmp.recycle();
+                        out.flush();
                     }
-                } else {
-                    publishProgress("Rendering document pages...");
-                    ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
-                    if (pfd != null) {
-                        PdfRenderer renderer = new PdfRenderer(pfd);
-                        int count = renderer.getPageCount();
-                        for (int i = 0; i < count; i++) {
-                            publishProgress("Printing page " + (i + 1) + " of " + count + "...");
-                            PdfRenderer.Page page = renderer.openPage(i);
-                            int w = (page.getWidth() * 300) / 72;
-                            int h = (page.getHeight() * 300) / 72;
-                            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                            bmp.eraseColor(0xFFFFFFFF);
-                            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
-                            page.close();
-
-                            out.write(renderBitmapToPcl(bmp));
-                            bmp.recycle();
-                            out.flush();
-                        }
-                        renderer.close();
-                        pfd.close();
-                    }
+                    renderer.close();
+                    pfd.close();
                 }
 
                 out.write("\u001B*rB\u001BE\u001B%-12345X".getBytes("US-ASCII"));
@@ -220,7 +235,7 @@ public class MainActivity extends Activity {
                 socket.close();
                 return true;
             } catch (Exception e) {
-                error = e.getMessage() != null ? e.getMessage() : "Unknown print error";
+                error = e.getMessage() != null ? e.getMessage() : "Print error";
                 return false;
             }
         }
