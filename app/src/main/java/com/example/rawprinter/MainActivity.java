@@ -9,9 +9,12 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
+import android.view.Gravity;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.ByteArrayOutputStream;
@@ -30,25 +33,60 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        txtIp = findViewById(R.id.txtIp);
-        txtPort = findViewById(R.id.txtPort);
-        chkDuplex = findViewById(R.id.chkDuplex);
-        lblStatus = findViewById(R.id.lblStatus);
-        Button btnPick = findViewById(R.id.btnPick);
-        Button btnPrint = findViewById(R.id.btnPrint);
+        // Dynamic, robust UI layout (zero XML ID dependencies)
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40, 40, 40, 40);
 
+        TextView title = new TextView(this);
+        title.setText("HP LaserJet 1320 Print Hub");
+        title.setTextSize(20);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setTextColor(0xFF0F172A);
+        layout.addView(title);
+
+        TextView lblIp = new TextView(this);
+        lblIp.setText("Router / Print Server IP:");
+        lblIp.setPadding(0, 30, 0, 10);
+        layout.addView(lblIp);
+
+        txtIp = new EditText(this);
+        txtIp.setText("192.168.1.1");
+        layout.addView(txtIp);
+
+        TextView lblPort = new TextView(this);
+        lblPort.setText("Raw Socket Port:");
+        lblPort.setPadding(0, 20, 0, 10);
+        layout.addView(lblPort);
+
+        txtPort = new EditText(this);
+        txtPort.setText("9100");
+        txtPort.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        layout.addView(txtPort);
+
+        chkDuplex = new CheckBox(this);
+        chkDuplex.setText("Double-Sided Printing (Duplex)");
+        chkDuplex.setChecked(true);
+        chkDuplex.setPadding(0, 20, 0, 20);
+        layout.addView(chkDuplex);
+
+        Button btnPick = new Button(this);
+        btnPick.setText("Choose File Manually");
         btnPick.setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
             startActivityForResult(intent, PICK_FILE);
         });
+        layout.addView(btnPick);
 
+        Button btnPrint = new Button(this);
+        btnPrint.setText("Print to HP 1320");
         btnPrint.setOnClickListener(v -> {
             if (targetUri == null) {
-                Toast.makeText(this, "Please select or share a file first.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Please select or share a document first.", Toast.LENGTH_SHORT).show();
                 return;
             }
             String ip = txtIp.getText().toString().trim();
@@ -56,6 +94,17 @@ public class MainActivity extends Activity {
             boolean duplex = chkDuplex.isChecked();
             new PrintTask(ip, port, duplex, targetUri).execute();
         });
+        layout.addView(btnPrint);
+
+        lblStatus = new TextView(this);
+        lblStatus.setText("Status: Ready");
+        lblStatus.setTextSize(15);
+        lblStatus.setPadding(0, 30, 0, 10);
+        lblStatus.setTextColor(0xFF0284C7);
+        layout.addView(lblStatus);
+
+        scroll.addView(layout);
+        setContentView(scroll);
 
         processIntent(getIntent());
     }
@@ -84,8 +133,8 @@ public class MainActivity extends Activity {
 
         if (uri != null) {
             targetUri = uri;
-            lblStatus.setText("File loaded! Ready to Print.");
-            Toast.makeText(this, "File ready for HP 1320", Toast.LENGTH_SHORT).show();
+            lblStatus.setText("File loaded! Tap 'Print to HP 1320'");
+            Toast.makeText(this, "Document ready to print", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -94,15 +143,15 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PICK_FILE && resultCode == RESULT_OK && data != null) {
             targetUri = data.getData();
-            lblStatus.setText("File Selected. Ready to Print.");
+            lblStatus.setText("File selected! Tap 'Print to HP 1320'");
         }
     }
 
     private class PrintTask extends AsyncTask<Void, String, Boolean> {
-        private String ip;
-        private int port;
-        private boolean duplex;
-        private Uri uri;
+        private final String ip;
+        private final int port;
+        private final boolean duplex;
+        private final Uri uri;
         private String error = "";
 
         PrintTask(String ip, int port, boolean duplex, Uri uri) {
@@ -120,7 +169,7 @@ public class MainActivity extends Activity {
         @Override
         protected Boolean doInBackground(Void... voids) {
             try {
-                publishProgress("Connecting to HP 1320...");
+                publishProgress("Connecting to " + ip + ":" + port + "...");
                 Socket socket = new Socket();
                 socket.connect(new InetSocketAddress(ip, port), 4000);
                 OutputStream out = socket.getOutputStream();
@@ -129,10 +178,10 @@ public class MainActivity extends Activity {
                 String initPcl = "\u001B%-12345X@PJL\r\n@PJL ENTER LANGUAGE=PCL\r\n\u001BE" + duplexCmd;
                 out.write(initPcl.getBytes("US-ASCII"));
 
-                String type = getContentResolver().getType(uri);
-                if (type == null) type = "";
+                String mime = getContentResolver().getType(uri);
+                if (mime == null) mime = "";
 
-                if (type.startsWith("image/") || uri.toString().matches("(?i).*\\.(png|jpg|jpeg|webp)$")) {
+                if (mime.startsWith("image/") || uri.toString().matches("(?i).*\\.(png|jpg|jpeg|webp)$")) {
                     publishProgress("Rendering image...");
                     InputStream in = getContentResolver().openInputStream(uri);
                     Bitmap bmp = BitmapFactory.decodeStream(in);
@@ -142,7 +191,7 @@ public class MainActivity extends Activity {
                         bmp.recycle();
                     }
                 } else {
-                    publishProgress("Rendering PDF...");
+                    publishProgress("Rendering document pages...");
                     ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
                     if (pfd != null) {
                         PdfRenderer renderer = new PdfRenderer(pfd);
@@ -171,7 +220,7 @@ public class MainActivity extends Activity {
                 socket.close();
                 return true;
             } catch (Exception e) {
-                error = e.getMessage();
+                error = e.getMessage() != null ? e.getMessage() : "Unknown print error";
                 return false;
             }
         }
@@ -179,7 +228,7 @@ public class MainActivity extends Activity {
         @Override
         protected void onPostExecute(Boolean success) {
             if (success) {
-                lblStatus.setText("Printed successfully!");
+                lblStatus.setText("Print job sent successfully!");
             } else {
                 lblStatus.setText("Error: " + error);
             }
