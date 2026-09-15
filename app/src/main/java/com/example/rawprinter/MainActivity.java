@@ -1,4 +1,5 @@
 package com.example.rawprinter;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -45,6 +46,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("printer_prefs", MODE_PRIVATE);
+
         ScrollView scrollView = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -67,12 +69,32 @@ public class MainActivity extends Activity {
         txtApi = new EditText(this);
         txtApi.setHint("ConvertAPI Secret Key");
         txtApi.setText(prefs.getString("apikey", ""));
+        // This line hides the API key like a password
+        txtApi.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
         root.addView(txtApi);
+
+        Button btnSave = new Button(this);
+        btnSave.setText("Save Settings");
+        btnSave.setOnClickListener(v -> {
+            saveSettings();
+            Toast.makeText(this, "Settings Saved!", Toast.LENGTH_SHORT).show();
+        });
+        root.addView(btnSave);
 
         chkDuplex = new CheckBox(this);
         chkDuplex.setText("Double-Sided Printing (Duplex)");
         chkDuplex.setChecked(prefs.getBoolean("duplex", true));
         root.addView(chkDuplex);
+
+        Button btnPick = new Button(this);
+        btnPick.setText("Choose File Manually");
+        btnPick.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            startActivityForResult(intent, 1001);
+        });
+        root.addView(btnPick);
 
         Button btnPrint = new Button(this);
         btnPrint.setText("Print to HP 1320");
@@ -81,7 +103,7 @@ public class MainActivity extends Activity {
             if (localPrintFile != null && localPrintFile.exists()) {
                 new PrintEngineTask(txtIp.getText().toString(), Integer.parseInt(txtPort.getText().toString()), chkDuplex.isChecked(), localPrintFile).execute();
             } else {
-                Toast.makeText(this, "Please share a file first.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Please select or share a file first.", Toast.LENGTH_SHORT).show();
             }
         });
         root.addView(btnPrint);
@@ -97,11 +119,26 @@ public class MainActivity extends Activity {
     }
 
     private void saveSettings() {
-        prefs.edit().putString("ip", txtIp.getText().toString()).putInt("port", Integer.parseInt(txtPort.getText().toString())).putString("apikey", txtApi.getText().toString().trim()).putBoolean("duplex", chkDuplex.isChecked()).apply();
+        prefs.edit().putString("ip", txtIp.getText().toString())
+             .putInt("port", Integer.parseInt(txtPort.getText().toString()))
+             .putString("apikey", txtApi.getText().toString().trim())
+             .putBoolean("duplex", chkDuplex.isChecked()).apply();
     }
 
     @Override
-    protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleIncomingData(intent); }
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingData(intent);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 1001 && resultCode == RESULT_OK && data != null) {
+            processUri(data.getData());
+        }
+    }
 
     private void handleIncomingData(Intent intent) {
         if (intent == null) return;
@@ -109,55 +146,76 @@ public class MainActivity extends Activity {
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
             if (intent.hasExtra(Intent.EXTRA_STREAM)) uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
             else if (intent.getClipData() != null) uri = intent.getClipData().getItemAt(0).getUri();
-        } else if (Intent.ACTION_VIEW.equals(intent.getAction())) { uri = intent.getData(); }
-        
-        if (uri != null) {
-            String mime = getContentResolver().getType(uri);
-            String format = "raw";
-            if (mime != null) {
-                if (mime.contains("spreadsheet") || mime.contains("excel") || mime.contains("xls")) format = "xlsx";
-                else if (mime.contains("word") || mime.contains("document") || mime.contains("doc")) format = "docx";
-            }
-            try {
-                InputStream in = getContentResolver().openInputStream(uri);
-                File tempFile = new File(getCacheDir(), "shared_temp.dat");
-                FileOutputStream out = new FileOutputStream(tempFile);
-                byte[] buffer = new byte[32768]; int read;
-                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
-                out.close(); in.close();
-
-                if (format.equals("xlsx") || format.equals("docx")) {
-                    String secret = txtApi.getText().toString().trim();
-                    if (secret.isEmpty()) { lblStatus.setText("Error: ConvertAPI Secret Key missing!"); return; }
-                    new CloudConvertTask(secret, format, tempFile).execute();
-                } else {
-                    localPrintFile = tempFile; lblStatus.setText("Local File (PDF/Image) ready to print.");
-                }
-            } catch (Exception e) { lblStatus.setText("File Error: " + e.getMessage()); }
+        } else if (Intent.ACTION_VIEW.equals(intent.getAction())) {
+            uri = intent.getData();
         }
+        if (uri != null) processUri(uri);
+    }
+
+    private void processUri(Uri uri) {
+        String mime = getContentResolver().getType(uri);
+        String format = "raw";
+        if (mime != null) {
+            if (mime.contains("spreadsheet") || mime.contains("excel") || mime.contains("xls")) format = "xlsx";
+            else if (mime.contains("word") || mime.contains("document") || mime.contains("doc")) format = "docx";
+        }
+        
+        try {
+            InputStream in = getContentResolver().openInputStream(uri);
+            File tempFile = new File(getCacheDir(), "shared_temp.dat");
+            FileOutputStream out = new FileOutputStream(tempFile);
+            byte[] buffer = new byte[32768]; int read;
+            while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+            out.close(); in.close();
+
+            if (format.equals("xlsx") || format.equals("docx")) {
+                String secret = txtApi.getText().toString().trim();
+                if (secret.isEmpty()) {
+                    lblStatus.setText("Error: Office file detected, but ConvertAPI Secret Key is missing!");
+                    return;
+                }
+                new CloudConvertTask(secret, format, tempFile).execute();
+            } else {
+                localPrintFile = tempFile;
+                lblStatus.setText("Local File (PDF/Image) ready to print.");
+            }
+        } catch (Exception e) { lblStatus.setText("File Error: " + e.getMessage()); }
     }
 
     private class CloudConvertTask extends AsyncTask<Void, String, Boolean> {
         String secret, format; File sourceFile; String err = "";
-        CloudConvertTask(String secret, String format, File sourceFile) { this.secret = secret; this.format = format; this.sourceFile = sourceFile; }
+        CloudConvertTask(String secret, String format, File sourceFile) {
+            this.secret = secret; this.format = format; this.sourceFile = sourceFile;
+        }
         @Override protected void onProgressUpdate(String... values) { lblStatus.setText(values[0]); }
         @Override protected Boolean doInBackground(Void... voids) {
             try {
-                publishProgress("Uploading " + format.toUpperCase() + " for conversion...");
+                publishProgress("Uploading " + format.toUpperCase() + " to Cloud for PDF conversion...");
                 OkHttpClient client = new OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build();
-                RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("File", "document." + format, RequestBody.create(sourceFile, MediaType.parse("application/octet-stream"))).build();
+                RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                    .addFormDataPart("File", "document." + format, RequestBody.create(sourceFile, MediaType.parse("application/octet-stream")))
+                    .build();
                 Request request = new Request.Builder().url("https://v2.convertapi.com/convert/" + format + "/to/pdf?Secret=" + secret).post(requestBody).build();
+                
                 Response response = client.newCall(request).execute();
                 if (!response.isSuccessful()) throw new Exception("API Error " + response.code());
+                
                 publishProgress("Downloading converted PDF...");
                 JSONObject obj = new JSONObject(response.body().string());
-                byte[] pdfBytes = Base64.decode(obj.getJSONArray("Files").getJSONObject(0).getString("FileData"), Base64.DEFAULT);
+                String base64 = obj.getJSONArray("Files").getJSONObject(0).getString("FileData");
+                byte[] pdfBytes = Base64.decode(base64, Base64.DEFAULT);
+                
                 File resultFile = new File(getCacheDir(), "cloud_converted.pdf");
-                FileOutputStream fos = new FileOutputStream(resultFile); fos.write(pdfBytes); fos.close();
-                localPrintFile = resultFile; return true;
+                FileOutputStream fos = new FileOutputStream(resultFile);
+                fos.write(pdfBytes); fos.close();
+                
+                localPrintFile = resultFile;
+                return true;
             } catch (Exception e) { err = e.getMessage(); return false; }
         }
-        @Override protected void onPostExecute(Boolean success) { lblStatus.setText(success ? "Cloud conversion successful! Ready to Print." : "Cloud Error: " + err); }
+        @Override protected void onPostExecute(Boolean success) {
+            lblStatus.setText(success ? "Cloud conversion successful! Ready to Print." : "Cloud Error: " + err);
+        }
     }
 
     private class PrintEngineTask extends AsyncTask<Void, String, Boolean> {
@@ -170,6 +228,7 @@ public class MainActivity extends Activity {
                 Socket s = new Socket(); s.connect(new InetSocketAddress(ip, port), 5000);
                 OutputStream out = s.getOutputStream();
                 out.write(("\u001B%-12345X@PJL\r\n@PJL ENTER LANGUAGE=PCL\r\n\u001BE" + (duplex ? "\u001B&l1S" : "\u001B&l0S")).getBytes());
+                
                 publishProgress("Rendering to HP PCL...");
                 if (isPdf(file)) {
                     ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
@@ -185,12 +244,17 @@ public class MainActivity extends Activity {
                     Bitmap bmp = BitmapFactory.decodeFile(file.getAbsolutePath());
                     if (bmp != null) { out.write(convertToPcl(bmp)); bmp.recycle(); out.flush(); }
                 }
-                out.write("\u001B*rB\u001BE\u001B%-12345X".getBytes()); out.flush(); s.close(); return true;
+                out.write("\u001B*rB\u001BE\u001B%-12345X".getBytes());
+                out.flush(); s.close(); return true;
             } catch (Exception e) { return false; }
         }
         @Override protected void onPostExecute(Boolean success) { lblStatus.setText(success ? "Printed!" : "Print Failed."); }
     }
-    private boolean isPdf(File f) { try (FileInputStream fis = new FileInputStream(f)) { byte[] h = new byte[4]; if (fis.read(h)==4) return h[0]==0x25 && h[1]==0x50; } catch (Exception e){} return false; }
+
+    private boolean isPdf(File f) {
+        try (FileInputStream fis = new FileInputStream(f)) { byte[] h = new byte[4]; if (fis.read(h)==4) return h[0]==0x25 && h[1]==0x50; } catch (Exception e){} return false;
+    }
+
     private byte[] convertToPcl(Bitmap bmp) throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream(); int w = bmp.getWidth(), h = bmp.getHeight();
         bos.write("\u001B&l0E\u001B*t300R\u001B*r1A".getBytes());
