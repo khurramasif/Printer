@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.rawprinter">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:label="HP 1320 Service" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:theme="@android:style/Theme.DeviceDefault.Light">
-        <activity android:name=".MainActivity" android:exported="true">
+    <application android:label="HP 1320 Print" android:icon="@drawable/ic_launcher" android:theme="@android:style/Theme.DeviceDefault.Light">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
-        <service android:name=".HpPrintService" android:permission="android.permission.BIND_PRINT_SERVICE" android:exported="true">
-            <intent-filter><action android:name="android.printservice.PrintService" /></intent-filter>
-            <meta-data android:name="android.printservice" android:resource="@xml/print_service_config" />
-        </service>
     </application>
 </manifest>
